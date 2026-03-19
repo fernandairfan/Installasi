@@ -1,5 +1,6 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+import asyncio
 
 from config import TOKEN, ADMIN_IDS
 from database import init_db, allow_user, is_allowed, add_vps, list_vps, set_active, delete_vps
@@ -15,6 +16,54 @@ def set_state(uid, state):
 
 def get_state(uid):
     return user_state.get(uid)
+
+
+def progress_bar(percent: int, width: int = 10) -> str:
+    filled = int((percent / 100) * width)
+    empty = width - filled
+    return f"[{'|' * filled}{'-' * empty}] {percent}%"
+
+
+async def animate_progress(message, label: str, done_event: asyncio.Event):
+    percent = 0
+    while not done_event.is_set():
+        if percent < 90:
+            percent += 3
+        elif percent < 95:
+            percent += 1
+        try:
+            await message.edit_text(f"{label}\n{progress_bar(percent)}")
+        except Exception:
+            pass
+        await asyncio.sleep(2)
+
+
+async def run_command_with_progress(update_target, uid: int, command: str, label: str):
+    status_message = await update_target.reply_text(f"{label}\n{progress_bar(0)}")
+    done_event = asyncio.Event()
+    progress_task = asyncio.create_task(animate_progress(status_message, label, done_event))
+
+    try:
+        result = await asyncio.to_thread(run_command, uid, command)
+    finally:
+        done_event.set()
+        try:
+            await progress_task
+        except Exception:
+            pass
+
+    if result is None:
+        result = "Done"
+
+    output = str(result).strip() or "Done"
+    if len(output) > 3500:
+        output = output[:3500] + "\n\n...output dipotong"
+
+    final_text = f"{label}\n{progress_bar(100)}\n\n{output}"
+    try:
+        await status_message.edit_text(final_text)
+    except Exception:
+        await update_target.reply_text(final_text)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -50,12 +99,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text("Ketik command:")
 
     elif q.data == "reboot":
-        res = run_command(uid, "reboot")
-        await q.edit_message_text(res)
+        await q.edit_message_text("Menjalankan reboot...")
+        await run_command_with_progress(q.message, uid, "reboot", "Proses reboot VPS sedang berjalan")
 
     elif q.data == "monitor":
-        res = run_command(uid, "top -bn1 | head -5")
-        await q.edit_message_text(res)
+        await q.edit_message_text("Mengambil monitoring...")
+        await run_command_with_progress(q.message, uid, "top -bn1 | head -5", "Mengambil status CPU/RAM VPS")
 
     elif q.data == "switch":
         vps = list_vps(uid)
@@ -80,7 +129,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    text = update.message.text
+    text = update.message.text.strip()
 
     if not is_allowed(uid):
         return
@@ -113,8 +162,7 @@ async def message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif state == "install":
         if validate(text):
-            res = run_command(uid, text)
-            await update.message.reply_text(res)
+            await run_command_with_progress(update.message, uid, text, f"Menjalankan command: {text}")
         else:
             await update.message.reply_text("Command ditolak")
 

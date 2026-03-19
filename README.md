@@ -1,19 +1,24 @@
-# Advanced Telegram VPS Bot
+# Telegram VPS Bot v3
+
+## Fitur baru
+- Progress bar 1 pesan yang terus diupdate saat proses install / reboot / monitor berjalan.
+- Tidak menumpuk banyak pesan progress.
+- Input data VPS langsung dari Telegram.
+- Multi VPS, switch VPS, delete VPS.
 
 ## Install
-pip install -r requirements.txt
+```bash
+pip3 install -r requirements.txt
+```
 
-## Run
-export BOT_TOKEN=YOUR_TOKEN
-export ADMIN_IDS=YOUR_ID
-python bot.py
+## Jalankan
+Set environment:
+```bash
+export BOT_TOKEN="TOKEN_BOT_ANDA"
+export ADMIN_IDS="123456789"
+python3 bot.py
+```
 
-## Features
-- Login VPS via Telegram
-- Multi VPS
-- Switch / delete VPS
-- Command bebas (validated)
-- Reboot
-- Monitoring
-- Whitelist user
-
+## Catatan progress bar
+Progress bar ini adalah progress **estimasi visual** agar user tahu proses masih berjalan.
+Saat command selesai, bar langsung berubah ke 100% dan output akhir ditampilkan di pesan yang sama.
